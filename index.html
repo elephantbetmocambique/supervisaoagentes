@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supervisão de Agentes — Login</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo__icon">S</div>
+      <div class="login-logo__name">SupervisãoAgentes</div>
+      <div class="login-logo__sub">Sistema de Gestão em Campo</div>
+    </div>
+
+    <div id="login-error" class="hidden" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;color:#f87171;font-size:0.85rem;margin-bottom:16px;"></div>
+
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input type="email" id="login-email" class="form-control" placeholder="seu@email.com" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Palavra-passe</label>
+      <input type="password" id="login-password" class="form-control" placeholder="••••••••" autocomplete="current-password">
+    </div>
+
+    <button class="btn btn--primary btn--lg" style="width:100%;margin-top:8px;" id="login-btn">
+      <span id="login-btn-text">Entrar</span>
+      <div class="spinner" id="login-spinner" style="display:none;width:18px;height:18px;border-width:2px;"></div>
+    </button>
+
+    <p style="text-align:center;margin-top:20px;font-size:0.8rem;color:var(--text-muted);">
+      Problemas de acesso? Contacte o administrador.
+    </p>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script>
+(async () => {
+  // Already logged in?
+  const ok = await Auth.init();
+  if (ok) {
+    window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
+  }
+})();
+
+document.getElementById('login-btn').addEventListener('click', async () => {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  const spinner = document.getElementById('login-spinner');
+  const btnText = document.getElementById('login-btn-text');
+  errEl.classList.add('hidden');
+
+  if (!email || !password) { errEl.textContent = 'Preencha todos os campos.'; errEl.classList.remove('hidden'); return; }
+
+  spinner.style.display = 'block'; btnText.style.display = 'none';
+  document.getElementById('login-btn').disabled = true;
+
+  try {
+    await Auth.login(email, password);
+    window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
+  } catch (e) {
+    errEl.textContent = 'Email ou palavra-passe incorretos.';
+    errEl.classList.remove('hidden');
+  } finally {
+    spinner.style.display = 'none'; btnText.style.display = 'block';
+    document.getElementById('login-btn').disabled = false;
+  }
+});
+
+// Enter key
+document.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-btn').click(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — SupervisãoAgentes</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/config.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+(async () => {
+  const ok = await Auth.init();
+  if (!ok) { window.location.href = '../index.html'; return; }
+  if (!Auth.isAdmin()) { window.location.href = 'auditorias.html'; return; }
+
+  renderLayout('nav-dashboard', 'Dashboard');
+
+  UI.loading(true);
+  try {
+    const [
+      { count: totalAgentes },
+      { count: totalSupervisores },
+      { count: totalAuditorias },
+      { count: pendentes },
+      { data: recentAuditorias },
+      { data: topSupervisores }
+    ] = await Promise.all([
+      supabase.from('agentes').select('*', { count: 'exact', head: true }).eq('status', 'ativo'),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'supervisor'),
+      supabase.from('auditorias').select('*', { count: 'exact', head: true }),
+      supabase.from('auditorias').select('*', { count: 'exact', head: true }).eq('status', 'pendente'),
+      supabase.from('auditorias')
+        .select('*, agentes(nome, foto_url), profiles(full_name)')
+        .order('created_at', { ascending: false }).limit(8),
+      supabase.from('auditorias')
+        .select('supervisor_id, profiles(full_name)')
+        .eq('status', 'aprovado')
+    ]);
+
+    // Count per supervisor
+    const supMap = {};
+    (topSupervisores || []).forEach(a => {
+      const name = a.profiles?.full_name || '—';
+      supMap[name] = (supMap[name] || 0) + 1;
+    });
+    const sorted = Object.entries(supMap).sort((a,b) => b[1]-a[1]).slice(0,5);
+
+    document.getElementById('page-content').innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card stat-card--blue">
+          <div class="stat-card__glow"></div>
+          <div class="stat-card__icon">👤</div>
+          <div class="stat-card__value">${totalAgentes ?? 0}</div>
+          <div class="stat-card__label">Agentes Ativos</div>
+        </div>
+        <div class="stat-card stat-card--pink">
+          <div class="stat-card__glow"></div>
+          <div class="stat-card__icon">🎖</div>
+          <div class="stat-card__value">${totalSupervisores ?? 0}</div>
+          <div class="stat-card__label">Supervisores</div>
+        </div>
+        <div class="stat-card stat-card--green">
+          <div class="stat-card__glow"></div>
+          <div class="stat-card__icon">📋</div>
+          <div class="stat-card__value">${totalAuditorias ?? 0}</div>
+          <div class="stat-card__label">Auditorias Total</div>
+        </div>
+        <div class="stat-card stat-card--amber">
+          <div class="stat-card__glow"></div>
+          <div class="stat-card__icon">⏳</div>
+          <div class="stat-card__value">${pendentes ?? 0}</div>
+          <div class="stat-card__label">Pendentes Aprovação</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start;" class="dash-grid">
+        <div class="card">
+          <div class="card__header">
+            <span class="card__title">Auditorias Recentes</span>
+            <a href="auditorias.html" class="btn btn--ghost btn--sm">Ver todas →</a>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr>
+                <th>Agente</th>
+                <th>Supervisor</th>
+                <th>Data</th>
+                <th>Estado</th>
+                <th></th>
+              </tr></thead>
+              <tbody>
+                ${(recentAuditorias || []).map(a => `
+                  <tr>
+                    <td>
+                      <div class="table-agent">
+                        <div class="table-avatar">${a.agentes?.foto_url ? `<img src="${a.agentes.foto_url}">` : UI.initials(a.agentes?.nome || '?')}</div>
+                        <div>
+                          <div class="table-name">${a.agentes?.nome || '—'}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span class="text-sm">${a.profiles?.full_name || '—'}</span></td>
+                    <td><span class="text-sm text-muted">${UI.formatDate(a.created_at)}</span></td>
+                    <td>${UI.statusBadge(a.status)}</td>
+                    <td><a href="auditoria-detalhe.html?id=${a.id}" class="btn btn--ghost btn--sm">Ver</a></td>
+                  </tr>`).join('') || '<tr><td colspan="5"><div class="empty-state"><div class="empty-state__icon">📋</div><div class="empty-state__title">Sem auditorias</div></div></td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card__header"><span class="card__title">Top Supervisores</span></div>
+          <div class="card__body">
+            ${sorted.length ? sorted.map(([name, count], i) => `
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
+                <div style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--pink));display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:white;flex-shrink:0;">${i+1}</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:0.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${name}</div>
+                </div>
+                <span class="badge badge--success">${count} aud.</span>
+              </div>`).join('') : '<div class="empty-state" style="padding:24px 0;"><div class="empty-state__icon">🏆</div><div class="empty-state__text">Sem dados</div></div>'}
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Responsive grid fix for mobile
+    const style = document.createElement('style');
+    style.textContent = '@media(max-width:700px){.dash-grid{grid-template-columns:1fr!important}}';
+    document.head.appendChild(style);
+
+  } catch(e) {
+    document.getElementById('page-content').innerHTML = `<div class="empty-state"><div class="empty-state__icon">⚠</div><div class="empty-state__title">Erro ao carregar</div><div class="empty-state__text">${e.message}</div></div>`;
+  } finally {
+    UI.loading(false);
+  }
+})();
+</script>
+</body>
+</html>
