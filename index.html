@@ -37,39 +37,59 @@
   </div>
 </div>
 
-<!-- ORDEM OBRIGATÓRIA: 1) Supabase CDN  2) config  3) auth  4) código da página -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="js/config.js"></script>
-<script src="js/auth.js"></script>
 <script>
-// Todo o código da página dentro do DOMContentLoaded
-// para garantir que auth.js já foi processado
-document.addEventListener('DOMContentLoaded', async () => {
+// ============================================================
+// CONFIGURAÇÃO — altere apenas estas duas linhas se necessário
+// ============================================================
+const SUPABASE_URL     = 'https://udmlzpvpsllitrhxejvj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbWx6cHZwc2xsaXRyaHhlanZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjAyMzEsImV4cCI6MjA5NjQ5NjIzMX0.YK8IxVwt2-cqXRV1nGHLNsHZsvSflcTb1tpUY2dJ0pQ';
+</script>
+
+<!-- Supabase CDN -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
+  onload="initApp()"
+  onerror="showError('Falha ao carregar Supabase. Verifique a sua ligação à internet.')">
+</script>
+
+<script>
+// ============================================================
+// TODA A LÓGICA AQUI — só executa após CDN carregar (onload)
+// ============================================================
+
+function showError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+async function initApp() {
+  // Criar cliente Supabase
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // Verificar sessão existente
   try {
-    const ok = await Auth.init();
-    if (ok) {
-      window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      const { data: profile } = await sb.from('profiles').select('role').eq('id', session.user.id).single();
+      const dest = profile?.role === 'admin' ? 'pages/dashboard.html' : 'pages/auditorias.html';
+      window.location.href = dest;
       return;
     }
   } catch(e) {
-    console.error('Init error:', e);
+    console.warn('Sem sessão activa:', e.message);
   }
 
-  // Botão de login
+  // Botão login
   document.getElementById('login-btn').addEventListener('click', async () => {
     const email    = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
-    const errEl    = document.getElementById('login-error');
     const spinner  = document.getElementById('login-spinner');
     const btnText  = document.getElementById('login-btn-text');
 
-    errEl.classList.add('hidden');
+    document.getElementById('login-error').classList.add('hidden');
 
     if (!email || !password) {
-      errEl.textContent = 'Preencha todos os campos.';
-      errEl.classList.remove('hidden');
+      showError('Preencha todos os campos.');
       return;
     }
 
@@ -78,12 +98,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('login-btn').disabled = true;
 
     try {
-      await Auth.login(email, password);
-      window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
-    } catch (e) {
-      errEl.textContent = 'Erro: ' + (e.message || JSON.stringify(e));
-      errEl.classList.remove('hidden');
-      console.error('Erro login:', e);
+      const { data, error } = await sb.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+
+      const { data: profile } = await sb.from('profiles').select('role').eq('id', data.user.id).single();
+      const dest = profile?.role === 'admin' ? 'pages/dashboard.html' : 'pages/auditorias.html';
+      window.location.href = dest;
+
+    } catch(e) {
+      showError('Erro: ' + (e.message || JSON.stringify(e)));
+      console.error(e);
     } finally {
       spinner.style.display = 'none';
       btnText.style.display = 'block';
@@ -95,8 +119,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('login-btn').click();
   });
-
-});
+}
 </script>
 </body>
 </html>
