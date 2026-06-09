@@ -42,7 +42,6 @@
 <script src="js/auth.js"></script>
 <script>
 (async () => {
-  // Already logged in?
   const ok = await Auth.init();
   if (ok) {
     window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
@@ -57,25 +56,35 @@ document.getElementById('login-btn').addEventListener('click', async () => {
   const btnText = document.getElementById('login-btn-text');
   errEl.classList.add('hidden');
 
-  if (!email || !password) { errEl.textContent = 'Preencha todos os campos.'; errEl.classList.remove('hidden'); return; }
+  if (!email || !password) {
+    errEl.textContent = 'Preencha todos os campos.';
+    errEl.classList.remove('hidden');
+    return;
+  }
 
-  spinner.style.display = 'block'; btnText.style.display = 'none';
+  spinner.style.display = 'block';
+  btnText.style.display = 'none';
   document.getElementById('login-btn').disabled = true;
 
   try {
     await Auth.login(email, password);
     window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
   } catch (e) {
-    errEl.textContent = 'Email ou palavra-passe incorretos.';
+    // Mostrar erro REAL do Supabase em vez de mensagem genérica
+    const msg = e.message || JSON.stringify(e);
+    errEl.textContent = 'Erro: ' + msg;
     errEl.classList.remove('hidden');
+    console.error('Erro de login completo:', e);
   } finally {
-    spinner.style.display = 'none'; btnText.style.display = 'block';
+    spinner.style.display = 'none';
+    btnText.style.display = 'block';
     document.getElementById('login-btn').disabled = false;
   }
 });
 
-// Enter key
-document.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-btn').click(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('login-btn').click();
+});
 </script>
 </body>
 </html>
