@@ -1,28 +1,24 @@
 // ============================================================
-// AUTH MODULE
+// AUTH MODULE — carrega após CDN Supabase
 // ============================================================
-
-// Criar cliente Supabase aqui, depois do CDN ter carregado
-let supabase;
-
-function initSupabaseClient() {
-  if (supabase) return true;
-  if (typeof window.supabase === 'undefined') {
-    console.error('ERRO: window.supabase não está disponível. O CDN não carregou.');
-    return false;
-  }
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  return true;
-}
 
 const Auth = {
   currentUser: null,
   currentProfile: null,
+  _sb: null,
+
+  // Obter cliente Supabase (criado pelo config.js ou pelo index.html)
+  sb() {
+    if (!this._sb) {
+      if (typeof window.supabase === 'undefined') throw new Error('Supabase CDN não carregou');
+      this._sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    }
+    return this._sb;
+  },
 
   async init() {
-    if (!initSupabaseClient()) return false;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { session } } = await this.sb().auth.getSession();
       if (session) {
         await this.loadProfile(session.user);
         return true;
@@ -34,15 +30,14 @@ const Auth = {
   },
 
   async login(email, password) {
-    if (!initSupabaseClient()) throw new Error('Supabase não carregou. Refresque a página.');
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await this.sb().auth.signInWithPassword({ email, password });
     if (error) throw error;
     await this.loadProfile(data.user);
     return data;
   },
 
   async logout() {
-    if (supabase) await supabase.auth.signOut();
+    try { await this.sb().auth.signOut(); } catch(e) {}
     this.currentUser = null;
     this.currentProfile = null;
     const depth = window.location.pathname.includes('/pages/') ? '../' : '';
@@ -52,28 +47,19 @@ const Auth = {
   async loadProfile(user) {
     this.currentUser = user;
     try {
-      const { data, error } = await supabase
+      const { data, error } = await this.sb()
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
-      if (error) {
-        console.error('loadProfile error:', error);
-      } else {
-        this.currentProfile = data;
-      }
+      if (!error) this.currentProfile = data;
     } catch(e) {
-      console.error('loadProfile exception:', e);
+      console.error('loadProfile error:', e);
     }
   },
 
-  isAdmin() {
-    return this.currentProfile?.role === 'admin';
-  },
-
-  isSupervisor() {
-    return this.currentProfile?.role === 'supervisor';
-  },
+  isAdmin() { return this.currentProfile?.role === 'admin'; },
+  isSupervisor() { return this.currentProfile?.role === 'supervisor'; },
 
   requireAuth() {
     if (!this.currentUser) {
@@ -81,25 +67,8 @@ const Auth = {
       return false;
     }
     return true;
-  },
-
-  requireAdmin() {
-    if (!this.isAdmin()) {
-      window.location.href = 'dashboard.html';
-      return false;
-    }
-    return true;
   }
 };
 
-// Listener de sessão — só registar após cliente criado
-document.addEventListener('DOMContentLoaded', () => {
-  if (initSupabaseClient()) {
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        const depth = window.location.pathname.includes('/pages/') ? '../' : '';
-        window.location.href = depth + 'index.html';
-      }
-    });
-  }
-});
+// Referência global ao cliente para uso directo nas páginas
+function getSupabase() { return Auth.sb(); }
