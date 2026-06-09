@@ -14,9 +14,7 @@
       <div class="login-logo__name">SupervisãoAgentes</div>
       <div class="login-logo__sub">Sistema de Gestão em Campo</div>
     </div>
-
     <div id="login-error" class="hidden" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:10px 14px;color:#f87171;font-size:0.85rem;margin-bottom:16px;"></div>
-
     <div class="form-group">
       <label class="form-label">Email</label>
       <input type="email" id="login-email" class="form-control" placeholder="seu@email.com" autocomplete="username">
@@ -25,12 +23,10 @@
       <label class="form-label">Palavra-passe</label>
       <input type="password" id="login-password" class="form-control" placeholder="••••••••" autocomplete="current-password">
     </div>
-
     <button class="btn btn--primary btn--lg" style="width:100%;margin-top:8px;" id="login-btn">
       <span id="login-btn-text">Entrar</span>
       <div class="spinner" id="login-spinner" style="display:none;width:18px;height:18px;border-width:2px;"></div>
     </button>
-
     <p style="text-align:center;margin-top:20px;font-size:0.8rem;color:var(--text-muted);">
       Problemas de acesso? Contacte o administrador.
     </p>
@@ -38,23 +34,8 @@
 </div>
 
 <script>
-// ============================================================
-// CONFIGURAÇÃO — altere apenas estas duas linhas se necessário
-// ============================================================
-const SUPABASE_URL     = 'https://udmlzpvpsllitrhxejvj.supabase.co';
+const SUPABASE_URL = 'https://udmlzpvpsllitrhxejvj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbWx6cHZwc2xsaXRyaHhlanZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjAyMzEsImV4cCI6MjA5NjQ5NjIzMX0.YK8IxVwt2-cqXRV1nGHLNsHZsvSflcTb1tpUY2dJ0pQ';
-</script>
-
-<!-- Supabase CDN -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
-  onload="initApp()"
-  onerror="showError('Falha ao carregar Supabase. Verifique a sua ligação à internet.')">
-</script>
-
-<script>
-// ============================================================
-// TODA A LÓGICA AQUI — só executa após CDN carregar (onload)
-// ============================================================
 
 function showError(msg) {
   const el = document.getElementById('login-error');
@@ -62,64 +43,46 @@ function showError(msg) {
   el.classList.remove('hidden');
 }
 
-async function initApp() {
-  // Criar cliente Supabase
+function initApp() {
   const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // Verificar sessão existente
-  try {
-    const { data: { session } } = await sb.auth.getSession();
+  sb.auth.getSession().then(({ data: { session } }) => {
     if (session) {
-      const { data: profile } = await sb.from('profiles').select('role').eq('id', session.user.id).single();
-      const dest = profile?.role === 'admin' ? 'pages/dashboard.html' : 'pages/auditorias.html';
-      window.location.href = dest;
-      return;
+      sb.from('profiles').select('role').eq('id', session.user.id).single().then(({ data }) => {
+        window.location.href = data?.role === 'admin' ? 'pages/dashboard.html' : 'pages/auditorias.html';
+      });
     }
-  } catch(e) {
-    console.warn('Sem sessão activa:', e.message);
-  }
+  });
 
-  // Botão login
   document.getElementById('login-btn').addEventListener('click', async () => {
-    const email    = document.getElementById('login-email').value.trim();
+    const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
-    const spinner  = document.getElementById('login-spinner');
-    const btnText  = document.getElementById('login-btn-text');
-
     document.getElementById('login-error').classList.add('hidden');
 
-    if (!email || !password) {
-      showError('Preencha todos os campos.');
-      return;
-    }
+    if (!email || !password) { showError('Preencha todos os campos.'); return; }
 
-    spinner.style.display = 'block';
-    btnText.style.display = 'none';
+    document.getElementById('login-spinner').style.display = 'block';
+    document.getElementById('login-btn-text').style.display = 'none';
     document.getElementById('login-btn').disabled = true;
 
     try {
       const { data, error } = await sb.auth.signInWithPassword({ email, password });
       if (error) throw error;
-
       const { data: profile } = await sb.from('profiles').select('role').eq('id', data.user.id).single();
-      const dest = profile?.role === 'admin' ? 'pages/dashboard.html' : 'pages/auditorias.html';
-      window.location.href = dest;
-
+      window.location.href = profile?.role === 'admin' ? 'pages/dashboard.html' : 'pages/auditorias.html';
     } catch(e) {
       showError('Erro: ' + (e.message || JSON.stringify(e)));
-      console.error(e);
     } finally {
-      spinner.style.display = 'none';
-      btnText.style.display = 'block';
+      document.getElementById('login-spinner').style.display = 'none';
+      document.getElementById('login-btn-text').style.display = 'block';
       document.getElementById('login-btn').disabled = false;
     }
   });
 
-  // Enter key
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('login-btn').click();
-  });
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('login-btn').click(); });
 }
 </script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js" onload="initApp()" onerror="showError('Erro: CDN não carregou. Verifique a internet.')"></script>
 </body>
 </html>
