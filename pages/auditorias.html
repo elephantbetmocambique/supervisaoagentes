@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auditorias — SupervisãoAgentes</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<!-- MODAL AUDITORIA -->
+<div class="modal-backdrop" id="modal-auditoria">
+  <div class="modal modal--lg" style="max-width:680px;">
+    <div class="modal__header">
+      <span class="modal__title">Nova Auditoria</span>
+      <button class="modal__close" onclick="closeAuditModal()">✕</button>
+    </div>
+    <div class="modal__body">
+      <!-- Step 1: Agente -->
+      <div class="form-group">
+        <label class="form-label">Agente *</label>
+        <select id="aud-agente" class="form-control">
+          <option value="">— Selecionar agente —</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data da Visita *</label>
+          <input type="date" id="aud-data" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hora</label>
+          <input type="time" id="aud-hora" class="form-control">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Localização</label>
+        <input type="text" id="aud-local" class="form-control" placeholder="Endereço ou coordenadas GPS">
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Checklist operacional -->
+      <div class="audit-section">
+        <div class="audit-section__title">Condições Operacionais</div>
+        <div id="audit-checklist">
+          <div class="audit-item">
+            <span class="audit-item__label">Uniforme / Farda</span>
+            <div class="audit-item__control">
+              <button type="button" class="btn btn--sm check-btn" data-key="uniforme" data-val="sim" onclick="setCheck(this,'sim')">✓ Sim</button>
+              <button type="button" class="btn btn--sm check-btn" data-key="uniforme" data-val="nao" onclick="setCheck(this,'nao')">✕ Não</button>
+            </div>
+          </div>
+          <div class="audit-item">
+            <span class="audit-item__label">Material de Trabalho</span>
+            <div class="audit-item__control">
+              <button type="button" class="btn btn--sm check-btn" data-key="material" data-val="sim" onclick="setCheck(this,'sim')">✓ Sim</button>
+              <button type="button" class="btn btn--sm check-btn" data-key="material" data-val="nao" onclick="setCheck(this,'nao')">✕ Não</button>
+            </div>
+          </div>
+          <div class="audit-item">
+            <span class="audit-item__label">Ponto de Venda Ativo</span>
+            <div class="audit-item__control">
+              <button type="button" class="btn btn--sm check-btn" data-key="ponto_ativo" data-val="sim" onclick="setCheck(this,'sim')">✓ Sim</button>
+              <button type="button" class="btn btn--sm check-btn" data-key="ponto_ativo" data-val="nao" onclick="setCheck(this,'nao')">✕ Não</button>
+            </div>
+          </div>
+          <div class="audit-item">
+            <span class="audit-item__label">Comunicação / Sinal</span>
+            <div class="audit-item__control">
+              <button type="button" class="btn btn--sm check-btn" data-key="comunicacao" data-val="sim" onclick="setCheck(this,'sim')">✓ Sim</button>
+              <button type="button" class="btn btn--sm check-btn" data-key="comunicacao" data-val="nao" onclick="setCheck(this,'nao')">✕ Não</button>
+            </div>
+          </div>
+          <div class="audit-item">
+            <span class="audit-item__label">Cumprimento de Horário</span>
+            <div class="audit-item__control">
+              <button type="button" class="btn btn--sm check-btn" data-key="horario" data-val="sim" onclick="setCheck(this,'sim')">✓ Sim</button>
+              <button type="button" class="btn btn--sm check-btn" data-key="horario" data-val="nao" onclick="setCheck(this,'nao')">✕ Não</button>
+            </div>
+          </div>
+          <div class="audit-item">
+            <span class="audit-item__label">Atendimento ao Cliente</span>
+            <div class="audit-item__control">
+              <button type="button" class="btn btn--sm check-btn" data-key="atendimento" data-val="bom" onclick="setCheck(this,'bom')">👍 Bom</button>
+              <button type="button" class="btn btn--sm check-btn" data-key="atendimento" data-val="regular" onclick="setCheck(this,'regular')">😐 Regular</button>
+              <button type="button" class="btn btn--sm check-btn" data-key="atendimento" data-val="mau" onclick="setCheck(this,'mau')">👎 Mau</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Avaliação geral -->
+      <div class="audit-section">
+        <div class="audit-section__title">Avaliação Geral</div>
+        <div class="rating" id="rating-stars">
+          <span class="rating__star" data-v="1" onclick="setRating(1)">★</span>
+          <span class="rating__star" data-v="2" onclick="setRating(2)">★</span>
+          <span class="rating__star" data-v="3" onclick="setRating(3)">★</span>
+          <span class="rating__star" data-v="4" onclick="setRating(4)">★</span>
+          <span class="rating__star" data-v="5" onclick="setRating(5)">★</span>
+        </div>
+        <input type="hidden" id="aud-rating" value="0">
+      </div>
+
+      <!-- Upload fotos -->
+      <div class="audit-section">
+        <div class="audit-section__title">Fotografias da Visita</div>
+        <div class="photo-upload" id="photo-upload-zone">
+          <div class="photo-upload__icon">📷</div>
+          <div class="photo-upload__text">Clique ou arraste fotos aqui</div>
+          <div class="photo-upload__hint">JPG, PNG · Máx. 5MB por foto · Até 10 fotos</div>
+          <input type="file" id="photo-input" accept="image/*" multiple onchange="handlePhotos(this.files)">
+        </div>
+        <div class="photo-preview-grid" id="photo-preview-grid"></div>
+      </div>
+
+      <!-- Observações -->
+      <div class="form-group">
+        <label class="form-label">Observações</label>
+        <textarea id="aud-obs" class="form-control" rows="3" placeholder="Notas, comentários, recomendações..."></textarea>
+      </div>
+    </div>
+    <div class="modal__actions">
+      <button class="btn btn--ghost" onclick="closeAuditModal()">Cancelar</button>
+      <button class="btn btn--primary" id="btn-save-audit" onclick="saveAuditoria()">Submeter Auditoria</button>
+    </div>
+  </div>
+</div>
+
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('active')">
+  <img class="lightbox__img" id="lightbox-img" src="">
+  <button class="lightbox__close" onclick="document.getElementById('lightbox').classList.remove('active')">✕</button>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://udmlzpvpsllitrhxejvj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbWx6cHZwc2xsaXRyaHhlanZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjAyMzEsImV4cCI6MjA5NjQ5NjIzMX0.YK8IxVwt2-cqXRV1nGHLNsHZsvSflcTb1tpUY2dJ0pQ';
+const APP_VERSION = '1.0.0';
+const APP_NAME = 'SupervisãoAgentes';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+let allAuditorias = [], page = 1;
+let checkData = {}, rating = 0, photoFiles = [];
+
+(async () => {
+  const ok = await Auth.init();
+  if (!ok) { window.location.href = '../index.html'; return; }
+  renderLayout('nav-auditorias', 'Auditorias');
+  document.getElementById('topbar-actions').innerHTML = `<button class="btn btn--pink" onclick="openAuditModal()">+ Nova Auditoria</button>`;
+  await loadData();
+})();
+
+async function loadData() {
+  UI.loading(true);
+  try {
+    let query = Auth.sb().from('auditorias')
+      .select('*, agentes(nome, foto_url, zona), profiles(full_name)')
+      .order('created_at', { ascending: false });
+    if (!Auth.isAdmin()) query = query.eq('supervisor_id', Auth.currentUser.id);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    allAuditorias = data || [];
+    renderPage();
+  } catch(e) {
+    UI.toast('Erro: ' + e.message, 'error');
+  } finally {
+    UI.loading(false);
+  }
+}
+
+function renderPage() {
+  const el = document.getElementById('page-content');
+  if (!el) return;
+
+  const search = document.getElementById('aud-search')?.value?.toLowerCase() || '';
+  const statusF = document.getElementById('aud-status-filter')?.value || '';
+
+  let filtered = allAuditorias.filter(a => {
+    const ms = !search || a.agentes?.nome?.toLowerCase().includes(search) || a.agentes?.zona?.toLowerCase().includes(search);
+    const mst = !statusF || a.status === statusF;
+    return ms && mst;
+  });
+
+  const pg = UI.paginate(filtered, page, 12);
+
+  if (!document.getElementById('aud-search')) {
+    el.innerHTML = `
+      <div class="filters-row">
+        <div class="search-box" style="flex:1;max-width:320px;">
+          <span class="search-box__icon">🔍</span>
+          <input type="text" id="aud-search" class="form-control" placeholder="Pesquisar agente..." oninput="page=1;renderPage()">
+        </div>
+        <select class="form-control" id="aud-status-filter" style="width:160px;" onchange="page=1;renderPage()">
+          <option value="">Todos estados</option>
+          <option value="pendente">Pendente</option>
+          <option value="aprovado">Aprovado</option>
+          <option value="reprovado">Reprovado</option>
+        </select>
+        ${Auth.isAdmin() ? `<button class="btn btn--ghost btn--sm" onclick="exportAuditorias()">⬇ Exportar</button>` : ''}
+      </div>
+      <div id="aud-grid"></div>
+      <div id="aud-pagination"></div>`;
+  }
+
+  const grid = document.getElementById('aud-grid');
+  const pag = document.getElementById('aud-pagination');
+  if (!grid) return;
+
+  if (!pg.items.length) {
+    grid.innerHTML = `<div class="empty-state"><div class="empty-state__icon">📋</div><div class="empty-state__title">Sem auditorias</div><div class="empty-state__text">Clique em "Nova Auditoria" para começar.</div></div>`;
+    pag.innerHTML = '';
+    return;
+  }
+
+  grid.innerHTML = `<div class="card"><div class="table-wrap"><table class="table">
+    <thead><tr>
+      <th>Agente</th>
+      <th>Zona</th>
+      <th>Supervisor</th>
+      <th>Data</th>
+      <th>Avaliação</th>
+      <th>Estado</th>
+      <th>Ações</th>
+    </tr></thead>
+    <tbody>
+      ${pg.items.map(a => `<tr>
+        <td>
+          <div class="table-agent">
+            <div class="table-avatar">${a.agentes?.foto_url ? `<img src="${a.agentes.foto_url}">` : UI.initials(a.agentes?.nome || '?')}</div>
+            <div><div class="table-name">${a.agentes?.nome || '—'}</div></div>
+          </div>
+        </td>
+        <td>${a.agentes?.zona || '—'}</td>
+        <td>${a.profiles?.full_name || '—'}</td>
+        <td>${UI.formatDate(a.data_visita)}</td>
+        <td>${renderStars(a.avaliacao)}</td>
+        <td>${UI.statusBadge(a.status)}</td>
+        <td>
+          <div style="display:flex;gap:6px;">
+            <a href="auditoria-detalhe.html?id=${a.id}" class="btn btn--ghost btn--sm">Ver</a>
+            ${Auth.isAdmin() && a.status === 'pendente' ? `
+              <button class="btn btn--primary btn--sm" onclick="approveAudit('${a.id}','aprovado')">✓</button>
+              <button class="btn btn--danger btn--sm" onclick="approveAudit('${a.id}','reprovado')">✕</button>` : ''}
+          </div>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div></div>`;
+
+  UI.renderPagination(pag, page, pg.pages, p => { page = p; renderPage(); });
+}
+
+function renderStars(n) {
+  if (!n) return '<span style="color:var(--text-muted)">—</span>';
+  return Array.from({length: 5}, (_, i) =>
+    `<span style="color:${i < n ? '#fbbf24' : 'var(--gray-600)'}">★</span>`).join('');
+}
+
+// Build page after layout renders
+const obs = new MutationObserver(() => {
+  if (document.getElementById('page-content')) { obs.disconnect(); renderPage(); }
+});
+obs.observe(document.getElementById('app'), { childList: true, subtree: true });
+
+// Auditoria modal
+async function openAuditModal() {
+  checkData = {}; rating = 0; photoFiles = [];
+  document.getElementById('aud-obs').value = '';
+  document.getElementById('aud-local').value = '';
+  document.getElementById('photo-preview-grid').innerHTML = '';
+  document.getElementById('aud-rating').value = 0;
+  setRating(0);
+  document.querySelectorAll('.check-btn').forEach(b => b.className = 'btn btn--sm check-btn btn--ghost');
+  document.getElementById('aud-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('aud-hora').value = new Date().toTimeString().slice(0,5);
+
+  // Load agentes
+  const sel = document.getElementById('aud-agente');
+  sel.innerHTML = '<option value="">— Selecionar agente —</option>';
+  let query = Auth.sb().from('agentes').select('id, nome').eq('status', 'ativo').order('nome');
+  if (!Auth.isAdmin()) query = query.eq('supervisor_id', Auth.currentUser.id);
+  const { data } = await query;
+  (data || []).forEach(a => sel.innerHTML += `<option value="${a.id}">${a.nome}</option>`);
+
+  document.getElementById('modal-auditoria').classList.add('active');
+}
+
+function closeAuditModal() { document.getElementById('modal-auditoria').classList.remove('active'); }
+
+function setCheck(btn, val) {
+  const key = btn.dataset.key;
+  checkData[key] = val;
+  btn.closest('.audit-item__control').querySelectorAll('.check-btn').forEach(b => b.className = 'btn btn--sm check-btn btn--ghost');
+  btn.classList.remove('btn--ghost');
+  if (val === 'sim' || val === 'bom') btn.classList.add('btn--primary');
+  else if (val === 'nao' || val === 'mau') btn.classList.add('btn--danger');
+  else btn.classList.add('btn--ghost');
+  btn.style.borderColor = val === 'sim' || val === 'bom' ? 'var(--blue)' : val === 'nao' || val === 'mau' ? 'rgba(239,68,68,0.5)' : 'var(--gray-500)';
+}
+
+function setRating(n) {
+  rating = n;
+  document.getElementById('aud-rating').value = n;
+  document.querySelectorAll('.rating__star').forEach(s => {
+    s.classList.toggle('active', parseInt(s.dataset.v) <= n);
+  });
+}
+
+function handlePhotos(files) {
+  const maxPhotos = 10;
+  const grid = document.getElementById('photo-preview-grid');
+  Array.from(files).slice(0, maxPhotos - photoFiles.length).forEach(file => {
+    if (file.size > 5 * 1024 * 1024) { UI.toast(`${file.name} é muito grande (máx 5MB)`, 'warning'); return; }
+    photoFiles.push(file);
+    const reader = new FileReader();
+    const idx = photoFiles.length - 1;
+    reader.onload = e => {
+      const div = document.createElement('div');
+      div.className = 'photo-thumb';
+      div.dataset.idx = idx;
+      div.innerHTML = `<img src="${e.target.result}"><button class="photo-thumb__remove" onclick="removePhoto(${idx})">✕</button>`;
+      grid.appendChild(div);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removePhoto(idx) {
+  photoFiles.splice(idx, 1);
+  const grid = document.getElementById('photo-preview-grid');
+  grid.querySelector(`[data-idx="${idx}"]`)?.remove();
+  grid.querySelectorAll('.photo-thumb').forEach((el, i) => {
+    el.dataset.idx = i;
+    el.querySelector('button').setAttribute('onclick', `removePhoto(${i})`);
+  });
+}
+
+async function saveAuditoria() {
+  const agenteId = document.getElementById('aud-agente').value;
+  const dataVisita = document.getElementById('aud-data').value;
+  if (!agenteId || !dataVisita) { UI.toast('Agente e data são obrigatórios', 'warning'); return; }
+
+  const btn = document.getElementById('btn-save-audit');
+  btn.disabled = true; btn.textContent = 'A submeter...';
+
+  try {
+    // Upload photos
+    const fotoUrls = [];
+    for (const file of photoFiles) {
+      const ext = file.name.split('.').pop();
+      const path = `auditorias/${agenteId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error } = await Auth.sb().storage.from('fotos').upload(path, file);
+      if (!error) {
+        const { data } = Auth.sb().storage.from('fotos').getPublicUrl(path);
+        fotoUrls.push(data.publicUrl);
+      }
+    }
+
+    const payload = {
+      agente_id: agenteId,
+      supervisor_id: Auth.currentUser.id,
+      data_visita: dataVisita,
+      hora_visita: document.getElementById('aud-hora').value || null,
+      localizacao: document.getElementById('aud-local').value || null,
+      checklist: checkData,
+      avaliacao: parseInt(document.getElementById('aud-rating').value) || null,
+      observacoes: document.getElementById('aud-obs').value || null,
+      fotos: fotoUrls,
+      status: 'pendente',
+    };
+
+    const { error } = await Auth.sb().from('auditorias').insert(payload);
+    if (error) throw error;
+
+    UI.toast('Auditoria submetida com sucesso!', 'success');
+    closeAuditModal();
+    await loadData();
+  } catch(e) {
+    UI.toast('Erro: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Submeter Auditoria';
+  }
+}
+
+async function approveAudit(id, status) {
+  const { error } = await Auth.sb().from('auditorias').update({ status }).eq('id', id);
+  if (error) { UI.toast('Erro: ' + error.message, 'error'); return; }
+  UI.toast(status === 'aprovado' ? 'Auditoria aprovada!' : 'Auditoria reprovada.', status === 'aprovado' ? 'success' : 'info');
+  await loadData();
+}
+
+function exportAuditorias() {
+  const rows = allAuditorias.map(a => ({
+    Agente: a.agentes?.nome || '',
+    Zona: a.agentes?.zona || '',
+    Supervisor: a.profiles?.full_name || '',
+    Data: UI.formatDate(a.data_visita),
+    Avaliacao: a.avaliacao || '',
+    Estado: a.status,
+    Observacoes: a.observacoes || ''
+  }));
+  exportToCSV(rows, 'auditorias.csv');
+}
+</script>
+</body>
+</html>

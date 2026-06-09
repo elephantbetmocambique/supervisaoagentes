@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Supervisores — SupervisãoAgentes</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<!-- MODAL SUPERVISOR -->
+<div class="modal-backdrop" id="modal-sup">
+  <div class="modal">
+    <div class="modal__header">
+      <span class="modal__title" id="modal-sup-title">Novo Supervisor</span>
+      <button class="modal__close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal__body">
+      <div class="form-group">
+        <label class="form-label">Nome Completo *</label>
+        <input type="text" id="sup-nome" class="form-control" placeholder="Nome do supervisor">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email * <span style="font-size:0.75rem;color:var(--text-muted);">(usado para login)</span></label>
+        <input type="email" id="sup-email" class="form-control" placeholder="email@exemplo.com">
+      </div>
+      <div class="form-group" id="password-group">
+        <label class="form-label">Palavra-passe *</label>
+        <input type="password" id="sup-password" class="form-control" placeholder="Mínimo 8 caracteres">
+        <span class="form-hint">A palavra-passe será enviada ao supervisor</span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Telefone</label>
+        <input type="tel" id="sup-telefone" class="form-control" placeholder="+258 8X XXX XXXX">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Zona / Região</label>
+        <input type="text" id="sup-zona" class="form-control" placeholder="Ex: Maputo Norte">
+      </div>
+    </div>
+    <div class="modal__actions">
+      <button class="btn btn--ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn--primary" id="btn-save-sup" onclick="saveSupervisor()">Criar Supervisor</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://udmlzpvpsllitrhxejvj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbWx6cHZwc2xsaXRyaHhlanZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjAyMzEsImV4cCI6MjA5NjQ5NjIzMX0.YK8IxVwt2-cqXRV1nGHLNsHZsvSflcTb1tpUY2dJ0pQ';
+const APP_VERSION = '1.0.0';
+const APP_NAME = 'SupervisãoAgentes';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+let supervisores = [];
+
+(async () => {
+  const ok = await Auth.init();
+  if (!ok) { window.location.href = '../index.html'; return; }
+  if (!Auth.isAdmin()) { window.location.href = 'auditorias.html'; return; }
+  renderLayout('nav-supervisores', 'Supervisores');
+  document.getElementById('topbar-actions').innerHTML = `<button class="btn btn--primary" onclick="openModal()">+ Novo Supervisor</button>`;
+  await load();
+})();
+
+async function load() {
+  UI.loading(true);
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*, agentes(count)')
+      .eq('role', 'supervisor')
+      .order('full_name');
+    if (error) throw error;
+    supervisores = data || [];
+    render();
+  } catch(e) {
+    UI.toast('Erro: ' + e.message, 'error');
+  } finally {
+    UI.loading(false);
+  }
+}
+
+function render() {
+  const el = document.getElementById('page-content');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px;">
+      <div class="stat-card stat-card--blue">
+        <div class="stat-card__glow"></div>
+        <div class="stat-card__icon">🎖</div>
+        <div class="stat-card__value">${supervisores.length}</div>
+        <div class="stat-card__label">Total Supervisores</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr>
+            <th>Supervisor</th>
+            <th>Email</th>
+            <th>Telefone</th>
+            <th>Zona</th>
+            <th>Agentes</th>
+            <th>Ações</th>
+          </tr></thead>
+          <tbody>
+            ${supervisores.map(s => `<tr>
+              <td>
+                <div class="table-agent">
+                  <div class="table-avatar">${UI.initials(s.full_name)}</div>
+                  <div><div class="table-name">${s.full_name}</div></div>
+                </div>
+              </td>
+              <td>${s.email || '—'}</td>
+              <td>${s.telefone || '—'}</td>
+              <td>${s.zona || '—'}</td>
+              <td><span class="badge badge--supervisor">${Array.isArray(s.agentes) ? s.agentes.length : (s.agentes?.count || 0)} agentes</span></td>
+              <td>
+                <button class="btn btn--ghost btn--sm" onclick="viewSupervisor('${s.id}')">Ver Agentes</button>
+              </td>
+            </tr>`).join('') || '<tr><td colspan="6"><div class="empty-state"><div class="empty-state__icon">🎖</div><div class="empty-state__title">Sem supervisores</div></div></td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+const obs = new MutationObserver(() => {
+  if (document.getElementById('page-content')) { obs.disconnect(); render(); }
+});
+obs.observe(document.getElementById('app'), { childList: true, subtree: true });
+
+function openModal() {
+  ['sup-nome','sup-email','sup-password','sup-telefone','sup-zona'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('modal-sup').classList.add('active');
+}
+function closeModal() { document.getElementById('modal-sup').classList.remove('active'); }
+
+async function saveSupervisor() {
+  const nome = document.getElementById('sup-nome').value.trim();
+  const email = document.getElementById('sup-email').value.trim();
+  const password = document.getElementById('sup-password').value;
+
+  if (!nome || !email || !password) { UI.toast('Nome, email e palavra-passe são obrigatórios', 'warning'); return; }
+  if (password.length < 8) { UI.toast('Palavra-passe deve ter pelo menos 8 caracteres', 'warning'); return; }
+
+  const btn = document.getElementById('btn-save-sup');
+  btn.disabled = true; btn.textContent = 'A criar...';
+
+  try {
+    // Create auth user via admin API (requires service role in production)
+    // For demo, we create the profile directly
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email, password, email_confirm: true,
+      user_metadata: { full_name: nome, role: 'supervisor' }
+    });
+
+    if (authError) throw authError;
+
+    await Auth.sb().from('profiles').upsert({
+      id: authData.user.id,
+      full_name: nome,
+      email,
+      role: 'supervisor',
+      telefone: document.getElementById('sup-telefone').value || null,
+      zona: document.getElementById('sup-zona').value || null,
+    });
+
+    UI.toast('Supervisor criado!', 'success');
+    closeModal();
+    await load();
+  } catch(e) {
+    UI.toast('Erro: ' + e.message + '. (Requer chave de serviço para criação de utilizadores.)', 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Criar Supervisor';
+  }
+}
+
+function viewSupervisor(id) {
+  window.location.href = `agentes.html?supervisor=${id}`;
+}
+</script>
+</body>
+</html>
