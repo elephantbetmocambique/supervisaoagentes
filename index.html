@@ -37,73 +37,65 @@
   </div>
 </div>
 
-<!-- Supabase PRIMEIRO, depois config e auth -->
+<!-- ORDEM OBRIGATÓRIA: 1) Supabase CDN  2) config  3) auth  4) código da página -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script>
-// Garantir que window.supabase está disponível antes de continuar
-window.addEventListener('load', function() {
-  if (typeof window.supabase === 'undefined') {
-    document.getElementById('login-error').textContent = 'Erro: Falha ao carregar biblioteca Supabase. Verifique a sua ligação à internet.';
-    document.getElementById('login-error').classList.remove('hidden');
-    return;
-  }
-});
-</script>
 <script src="js/config.js"></script>
 <script src="js/auth.js"></script>
 <script>
-(async () => {
+// Todo o código da página dentro do DOMContentLoaded
+// para garantir que auth.js já foi processado
+document.addEventListener('DOMContentLoaded', async () => {
+
+  // Verificar sessão existente
   try {
     const ok = await Auth.init();
     if (ok) {
       window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
+      return;
     }
   } catch(e) {
     console.error('Init error:', e);
   }
-})();
 
-document.getElementById('login-btn').addEventListener('click', async () => {
-  const email = document.getElementById('login-email').value.trim();
-  const password = document.getElementById('login-password').value;
-  const errEl = document.getElementById('login-error');
-  const spinner = document.getElementById('login-spinner');
-  const btnText = document.getElementById('login-btn-text');
-  errEl.classList.add('hidden');
+  // Botão de login
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    const email    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl    = document.getElementById('login-error');
+    const spinner  = document.getElementById('login-spinner');
+    const btnText  = document.getElementById('login-btn-text');
 
-  if (!email || !password) {
-    errEl.textContent = 'Preencha todos os campos.';
-    errEl.classList.remove('hidden');
-    return;
-  }
+    errEl.classList.add('hidden');
 
-  // Verificar se supabase está disponível
-  if (typeof supabase === 'undefined') {
-    errEl.textContent = 'Erro: Supabase não carregou. Refresque a página.';
-    errEl.classList.remove('hidden');
-    return;
-  }
+    if (!email || !password) {
+      errEl.textContent = 'Preencha todos os campos.';
+      errEl.classList.remove('hidden');
+      return;
+    }
 
-  spinner.style.display = 'block';
-  btnText.style.display = 'none';
-  document.getElementById('login-btn').disabled = true;
+    spinner.style.display = 'block';
+    btnText.style.display = 'none';
+    document.getElementById('login-btn').disabled = true;
 
-  try {
-    await Auth.login(email, password);
-    window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
-  } catch (e) {
-    errEl.textContent = 'Erro: ' + (e.message || JSON.stringify(e));
-    errEl.classList.remove('hidden');
-    console.error('Erro login:', e);
-  } finally {
-    spinner.style.display = 'none';
-    btnText.style.display = 'block';
-    document.getElementById('login-btn').disabled = false;
-  }
-});
+    try {
+      await Auth.login(email, password);
+      window.location.href = Auth.isAdmin() ? 'pages/dashboard.html' : 'pages/auditorias.html';
+    } catch (e) {
+      errEl.textContent = 'Erro: ' + (e.message || JSON.stringify(e));
+      errEl.classList.remove('hidden');
+      console.error('Erro login:', e);
+    } finally {
+      spinner.style.display = 'none';
+      btnText.style.display = 'block';
+      document.getElementById('login-btn').disabled = false;
+    }
+  });
 
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('login-btn').click();
+  // Enter key
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('login-btn').click();
+  });
+
 });
 </script>
 </body>
