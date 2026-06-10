@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Importar Agentes — SupervisãoAgentes</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+const SUPABASE_URL = 'https://udmlzpvpsllitrhxejvj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbWx6cHZwc2xsaXRyaHhlanZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjAyMzEsImV4cCI6MjA5NjQ5NjIzMX0.YK8IxVwt2-cqXRV1nGHLNsHZsvSflcTb1tpUY2dJ0pQ';
+const APP_VERSION = '1.0.0';
+const APP_NAME = 'SupervisãoAgentes';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+let parsedRows = [];
+let supervisores = [];
+let selectedSupervisor = '';
+let importing = false;
+
+(async () => {
+  const ok = await Auth.init();
+  if (!ok) { window.location.href = '../index.html'; return; }
+  if (!Auth.isAdmin()) { window.location.href = 'auditorias.html'; return; }
+  renderLayout('nav-agentes', 'Importar Agentes em Lote');
+
+  document.getElementById('topbar-actions').innerHTML = `
+    <a href="agentes.html" class="btn btn--ghost btn--sm">← Voltar a Agentes</a>`;
+
+  await loadSupervisores();
+  buildPage();
+})();
+
+async function loadSupervisores() {
+  const { data } = await Auth.sb().from('profiles').select('id, full_name').eq('role', 'supervisor').order('full_name');
+  supervisores = data || [];
+}
+
+function buildPage() {
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;" class="import-grid">
+
+      <!-- Coluna principal -->
+      <div>
+        <!-- Passo 1: Download template -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card__header">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--pink));display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:white;flex-shrink:0;">1</div>
+              <span class="card__title">Descarregar Modelo CSV</span>
+            </div>
+          </div>
+          <div class="card__body">
+            <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:14px;">
+              Descarregue o modelo, preencha com os dados dos agentes e carregue o ficheiro abaixo. As colunas devem estar exactamente como no modelo.
+            </p>
+            <div style="background:var(--gray-800);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:monospace;font-size:0.78rem;color:var(--text-secondary);margin-bottom:14px;overflow-x:auto;white-space:nowrap;">
+              nome,codigo,telefone,email,zona,data_inicio,status
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button class="btn btn--primary btn--sm" onclick="downloadTemplate()">⬇ Descarregar modelo.csv</button>
+              <button class="btn btn--ghost btn--sm" onclick="usarExemplo()">📋 Ver exemplo preenchido</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Passo 2: Seleccionar supervisor -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card__header">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--pink));display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:white;flex-shrink:0;">2</div>
+              <span class="card__title">Atribuir Supervisor</span>
+            </div>
+          </div>
+          <div class="card__body">
+            <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px;">
+              Seleccione o supervisor ao qual todos os agentes importados serão atribuídos. Pode alterar individualmente após a importação.
+            </p>
+            <select class="form-control" id="supervisor-select" onchange="selectedSupervisor=this.value" style="max-width:360px;">
+              <option value="">— Sem supervisor (atribuir depois) —</option>
+              ${supervisores.map(s => `<option value="${s.id}">${s.full_name}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <!-- Passo 3: Upload CSV -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card__header">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--pink));display:flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:700;color:white;flex-shrink:0;">3</div>
+              <span class="card__title">Carregar Ficheiro CSV</span>
+            </div>
+          </div>
+          <div class="card__body">
+            <div class="import-drop-zone" id="drop-zone">
+              <input type="file" accept=".csv,.txt" onchange="handleFile(this.files[0])" id="csv-input">
+              <div class="import-drop-zone__icon">📂</div>
+              <div class="import-drop-zone__title">Clique ou arraste o ficheiro CSV aqui</div>
+              <div class="import-drop-zone__hint">Formato: .csv · Máx. 500 agentes por ficheiro</div>
+            </div>
+
+            <!-- Preview tabela -->
+            <div id="preview-section" style="display:none;margin-top:20px;">
+              <div class="import-stats" id="import-stats"></div>
+              <div class="import-preview">
+                <div class="import-preview__header">
+                  <span style="font-size:0.85rem;font-weight:600;" id="preview-count"></span>
+                  <div style="display:flex;gap:8px;">
+                    <button class="btn btn--ghost btn--sm" onclick="clearFile()">✕ Limpar</button>
+                    <button class="btn btn--primary" id="btn-import" onclick="startImport()">
+                      ⬆ Importar Agentes
+                    </button>
+                  </div>
+                </div>
+                <div class="table-wrap" style="max-height:360px;overflow-y:auto;">
+                  <table class="table" id="preview-table">
+                    <thead><tr>
+                      <th>#</th>
+                      <th>Nome</th>
+                      <th class="table-hide-mobile">ID do Agente</th>
+                      <th>Telefone</th>
+                      <th class="table-hide-mobile">Zona</th>
+                      <th>Estado</th>
+                    </tr></thead>
+                    <tbody id="preview-tbody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progresso da importação -->
+        <div class="card" id="progress-card" style="display:none;">
+          <div class="card__body">
+            <div style="font-size:0.9rem;font-weight:600;margin-bottom:10px;" id="progress-title">A importar...</div>
+            <div class="progress-bar">
+              <div class="progress-bar__fill" id="progress-fill" style="width:0%"></div>
+            </div>
+            <div style="font-size:0.8rem;color:var(--text-muted);margin-top:6px;" id="progress-text">0 / 0</div>
+
+            <!-- Resultado final -->
+            <div id="import-result" style="display:none;margin-top:16px;">
+              <div class="import-stats" id="result-stats"></div>
+              <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+                <a href="agentes.html" class="btn btn--primary btn--sm">Ver Agentes →</a>
+                <button class="btn btn--ghost btn--sm" onclick="resetImport()">↺ Nova Importação</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Coluna lateral: Instruções -->
+      <div>
+        <div class="card" style="position:sticky;top:80px;">
+          <div class="card__header"><span class="card__title">📋 Guia Rápido</span></div>
+          <div class="card__body" style="font-size:0.82rem;color:var(--text-secondary);display:flex;flex-direction:column;gap:14px;">
+
+            <div>
+              <div style="font-weight:600;color:var(--text-primary);margin-bottom:4px;">Colunas obrigatórias</div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <span>• <code style="color:var(--pink-light);">nome</code> — Nome completo</span>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-weight:600;color:var(--text-primary);margin-bottom:4px;">Colunas opcionais</div>
+              <div style="display:flex;flex-direction:column;gap:4px;">
+                <span>• <code style="color:var(--blue-light);">codigo</code> — ID do agente na empresa</span>
+                <span>• <code style="color:var(--blue-light);">telefone</code> — Ex: 841234567</span>
+                <span>• <code style="color:var(--blue-light);">email</code> — Email do agente</span>
+                <span>• <code style="color:var(--blue-light);">zona</code> — Ex: Matola</span>
+                <span>• <code style="color:var(--blue-light);">data_inicio</code> — AAAA-MM-DD</span>
+                <span>• <code style="color:var(--blue-light);">status</code> — ativo ou inativo</span>
+              </div>
+            </div>
+
+            <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:10px;">
+              <div style="font-weight:600;color:#fbbf24;margin-bottom:4px;">⚠ Atenção</div>
+              <div style="color:var(--text-muted);">A primeira linha do CSV deve ser o cabeçalho. Agentes com nome duplicado são ignorados.</div>
+            </div>
+
+            <div style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:8px;padding:10px;">
+              <div style="font-weight:600;color:#34d399;margin-bottom:4px;">✓ Dica</div>
+              <div style="color:var(--text-muted);">Pode editar o CSV no Excel ou Google Sheets. Guarde sempre como CSV UTF-8.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>`;
+
+  // Drag and drop
+  const zone = document.getElementById('drop-zone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  });
+}
+
+const obs = new MutationObserver(() => {
+  if (document.getElementById('page-content')) { obs.disconnect(); buildPage(); }
+});
+obs.observe(document.getElementById('app'), { childList: true, subtree: true });
+
+// ============================================================
+// CSV PARSING
+// ============================================================
+
+function handleFile(file) {
+  if (!file) return;
+  if (!file.name.match(/\.(csv|txt)$/i)) {
+    UI.toast('Por favor carregue um ficheiro .csv', 'warning');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = e => parseCSV(e.target.result);
+  reader.readAsText(file, 'UTF-8');
+}
+
+function parseCSV(text) {
+  // Normalizar quebras de linha
+  const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
+  if (lines.length < 2) { UI.toast('Ficheiro vazio ou sem dados', 'warning'); return; }
+
+  // Parse cabeçalho
+  const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().trim()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remover acentos
+    .replace(/\s+/g, '_'));
+
+  const nomeIdx = headers.indexOf('nome');
+  if (nomeIdx === -1) {
+    UI.toast('Coluna "nome" não encontrada. Verifique o cabeçalho do CSV.', 'error');
+    return;
+  }
+
+  parsedRows = [];
+  const seen = new Set();
+
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const cols = parseCSVLine(lines[i]);
+    const get = key => {
+      const idx = headers.indexOf(key);
+      return idx >= 0 ? (cols[idx] || '').trim() : '';
+    };
+
+    const nome = get('nome');
+    if (!nome) { parsedRows.push({ _error: 'Nome vazio', _line: i + 1 }); continue; }
+
+    const isDuplicate = seen.has(nome.toLowerCase());
+    seen.add(nome.toLowerCase());
+
+    parsedRows.push({
+      nome,
+      codigo: get('codigo') || get('id_agente') || null,
+      telefone: get('telefone') || null,
+      email: get('email') || null,
+      zona: get('zona') || null,
+      data_inicio: get('data_inicio') || null,
+      status: ['ativo','inativo'].includes(get('status')) ? get('status') : 'ativo',
+      _line: i + 1,
+      _duplicate: isDuplicate,
+      _error: null,
+    });
+  }
+
+  renderPreview();
+}
+
+function parseCSVLine(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i+1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      result.push(current); current = '';
+    } else {
+      current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+function renderPreview() {
+  const valid = parsedRows.filter(r => !r._error && !r._duplicate);
+  const errors = parsedRows.filter(r => r._error);
+  const duplicates = parsedRows.filter(r => r._duplicate);
+
+  document.getElementById('preview-section').style.display = 'block';
+  document.getElementById('preview-count').textContent = `${parsedRows.length} linha${parsedRows.length !== 1 ? 's' : ''} encontrada${parsedRows.length !== 1 ? 's' : ''}`;
+
+  document.getElementById('import-stats').innerHTML = `
+    <div class="import-stat">
+      <div class="import-stat__dot" style="background:#34d399;"></div>
+      <span>${valid.length} prontos para importar</span>
+    </div>
+    ${duplicates.length ? `<div class="import-stat">
+      <div class="import-stat__dot" style="background:#f59e0b;"></div>
+      <span>${duplicates.length} duplicado${duplicates.length !== 1 ? 's' : ''} (serão ignorados)</span>
+    </div>` : ''}
+    ${errors.length ? `<div class="import-stat">
+      <div class="import-stat__dot" style="background:#f87171;"></div>
+      <span>${errors.length} erro${errors.length !== 1 ? 's' : ''}</span>
+    </div>` : ''}`;
+
+  document.getElementById('preview-tbody').innerHTML = parsedRows.slice(0, 100).map(r => {
+    const rowClass = r._error ? 'import-row--error' : r._duplicate ? 'import-row--duplicate' : 'import-row--ok';
+    return `<tr class="${rowClass}">
+      <td style="color:var(--text-muted);font-size:0.75rem;">${r._line}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div class="table-avatar" style="width:28px;height:28px;font-size:0.65rem;flex-shrink:0;">${UI.initials(r.nome || '?')}</div>
+          <span style="font-weight:500;">${r.nome || '—'}</span>
+        </div>
+      </td>
+      <td class="table-hide-mobile">${r.codigo || '—'}</td>
+      <td>${r.telefone || '—'}</td>
+      <td class="table-hide-mobile">${r.zona || '—'}</td>
+      <td>
+        ${r._error ? `<span class="badge badge--danger" title="${r._error}">Erro</span>` :
+          r._duplicate ? `<span class="badge badge--warning">Duplicado</span>` :
+          `<span class="badge badge--success">OK</span>`}
+      </td>
+    </tr>`;
+  }).join('');
+
+  if (parsedRows.length > 100) {
+    document.getElementById('preview-tbody').innerHTML += `
+      <tr><td colspan="6" style="text-align:center;color:var(--text-muted);font-size:0.8rem;padding:12px;">
+        ... e mais ${parsedRows.length - 100} linhas
+      </td></tr>`;
+  }
+
+  document.getElementById('btn-import').textContent = `⬆ Importar ${valid.length} Agente${valid.length !== 1 ? 's' : ''}`;
+  document.getElementById('btn-import').disabled = valid.length === 0;
+}
+
+function clearFile() {
+  parsedRows = [];
+  document.getElementById('preview-section').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  document.getElementById('progress-card').style.display = 'none';
+}
+
+// ============================================================
+// IMPORTAÇÃO
+// ============================================================
+
+async function startImport() {
+  if (importing) return;
+  const valid = parsedRows.filter(r => !r._error && !r._duplicate);
+  if (!valid.length) { UI.toast('Sem agentes válidos para importar', 'warning'); return; }
+
+  const ok = await UI.confirm(
+    'Confirmar Importação',
+    `Vai importar ${valid.length} agente${valid.length !== 1 ? 's' : ''}${selectedSupervisor ? ' com supervisor atribuído' : ''}. Continuar?`
+  );
+  if (!ok) return;
+
+  importing = true;
+  document.getElementById('progress-card').style.display = 'block';
+  document.getElementById('import-result').style.display = 'none';
+  document.getElementById('btn-import').disabled = true;
+
+  let success = 0, failed = 0, failedNames = [];
+  const batchSize = 20;
+
+  for (let i = 0; i < valid.length; i += batchSize) {
+    const batch = valid.slice(i, i + batchSize).map(r => ({
+      nome: r.nome,
+      codigo: r.codigo,
+      telefone: r.telefone,
+      email: r.email,
+      zona: r.zona,
+      data_inicio: r.data_inicio,
+      status: r.status || 'ativo',
+      supervisor_id: selectedSupervisor || null,
+    }));
+
+    try {
+      const { data, error } = await Auth.sb()
+        .from('agentes')
+        .insert(batch)
+        .select();
+
+      if (error) {
+        failed += batch.length;
+        failedNames.push(...batch.map(b => b.nome));
+        console.error('Batch error:', error);
+      } else {
+        success += (data || batch).length;
+      }
+    } catch(e) {
+      failed += batch.length;
+      console.error('Batch exception:', e);
+    }
+
+    // Actualizar progresso
+    const done = Math.min(i + batchSize, valid.length);
+    const pct = Math.round((done / valid.length) * 100);
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-text').textContent = `${done} / ${valid.length} agentes processados`;
+    document.getElementById('progress-title').textContent = pct < 100 ? `A importar... ${pct}%` : 'Importação concluída!';
+
+    // Pequena pausa entre batches para não sobrecarregar
+    await new Promise(r => setTimeout(r, 100));
+  }
+
+  importing = false;
+  document.getElementById('import-result').style.display = 'block';
+  document.getElementById('result-stats').innerHTML = `
+    <div class="import-stat">
+      <div class="import-stat__dot" style="background:#34d399;"></div>
+      <span style="color:#34d399;font-size:0.95rem;">${success} agente${success !== 1 ? 's' : ''} importado${success !== 1 ? 's' : ''} com sucesso</span>
+    </div>
+    ${failed ? `<div class="import-stat">
+      <div class="import-stat__dot" style="background:#f87171;"></div>
+      <span style="color:#f87171;">${failed} falharam</span>
+    </div>` : ''}`;
+
+  if (success > 0) UI.toast(`${success} agentes importados!`, 'success');
+  if (failed > 0) UI.toast(`${failed} agentes falharam.`, 'error');
+}
+
+function resetImport() {
+  parsedRows = [];
+  importing = false;
+  document.getElementById('preview-section').style.display = 'none';
+  document.getElementById('progress-card').style.display = 'none';
+  document.getElementById('csv-input').value = '';
+  document.getElementById('btn-import').disabled = false;
+}
+
+// ============================================================
+// TEMPLATE CSV
+// ============================================================
+
+function downloadTemplate() {
+  const csv = 'nome,codigo,telefone,email,zona,data_inicio,status\n';
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'modelo_agentes.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function usarExemplo() {
+  const exemplo = `nome,codigo,telefone,email,zona,data_inicio,status
+João Manuel Silva,AG-001,841234567,joao@email.com,Matola,2025-01-15,ativo
+Maria Costa Fernandes,AG-002,862345678,,Maputo Centro,2025-02-01,ativo
+Pedro Nunes Machava,AG-003,,pedro@email.com,Boane,,ativo
+Ana Beatriz Tembe,AG-004,853456789,,KaMpfumo,2025-03-10,ativo
+Carlos Eduardo Matos,AG-005,874567890,carlos@email.com,Nlhamankulu,,ativo`;
+
+  parseCSV(exemplo);
+  UI.toast('Exemplo carregado com 5 agentes de demonstração', 'info');
+}
+</script>
+</body>
+</html>

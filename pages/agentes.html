@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agentes — SupervisãoAgentes</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="app"></div>
+
+<!-- MODAL AGENTE -->
+<div class="modal-backdrop" id="modal-agente">
+  <div class="modal modal--lg">
+    <div class="modal__header">
+      <span class="modal__title" id="modal-agente-title">Novo Agente</span>
+      <button class="modal__close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal__body">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;">
+        <div class="avatar-preview" id="avatar-preview" onclick="document.getElementById('avatar-file').click()">?
+          <input type="file" id="avatar-file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;" onchange="previewAvatar(this)">
+        </div>
+        <div>
+          <div style="font-size:0.85rem;font-weight:500;margin-bottom:4px;">Foto do Agente</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);">Clique para escolher uma foto</div>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nome Completo *</label>
+          <input type="text" id="ag-nome" class="form-control" placeholder="Nome do agente">
+        </div>
+        <div class="form-group">
+          <label class="form-label">ID do Agente</label>
+          <input type="text" id="ag-codigo" class="form-control" placeholder="Ex: AG-001, 12345">
+          <span class="form-hint">Identificador único do agente no sistema da empresa</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Telefone</label>
+          <input type="tel" id="ag-telefone" class="form-control" placeholder="+258 8X XXX XXXX">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" id="ag-email" class="form-control" placeholder="email@exemplo.com">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Zona / Área</label>
+          <input type="text" id="ag-zona" class="form-control" placeholder="Ex: Matola, Maputo Centro">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Supervisor</label>
+          <select id="ag-supervisor" class="form-control">
+            <option value="">— Selecionar supervisor —</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data de Início</label>
+          <input type="date" id="ag-data-inicio" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estado</label>
+          <select id="ag-status" class="form-control">
+            <option value="ativo">Ativo</option>
+            <option value="inativo">Inativo</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observações</label>
+        <textarea id="ag-obs" class="form-control" rows="2" placeholder="Notas adicionais..."></textarea>
+      </div>
+    </div>
+    <div class="modal__actions">
+      <button class="btn btn--ghost" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn--primary" id="btn-save-agente" onclick="saveAgente()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://udmlzpvpsllitrhxejvj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbWx6cHZwc2xsaXRyaHhlanZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjAyMzEsImV4cCI6MjA5NjQ5NjIzMX0.YK8IxVwt2-cqXRV1nGHLNsHZsvSflcTb1tpUY2dJ0pQ';
+const APP_VERSION = '1.0.0';
+const APP_NAME = 'SupervisãoAgentes';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+let allAgentes = [], allSupervisores = [], page = 1, editingId = null, avatarBlob = null;
+
+(async () => {
+  const ok = await Auth.init();
+  if (!ok) { window.location.href = '../index.html'; return; }
+  renderLayout('nav-agentes', 'Agentes');
+
+  if (Auth.isAdmin()) {
+    document.getElementById('topbar-actions').innerHTML = `
+      <a href="importar-agentes.html" class="btn btn--ghost btn--sm">⬆ Importar CSV</a>
+      <button class="btn btn--primary" onclick="openModal()">+ Novo Agente</button>`;
+  }
+
+  // Carregar supervisores E agentes em paralelo
+  await Promise.all([loadSupervisores(), loadAgentes()]);
+})();
+
+async function loadSupervisores() {
+  const { data } = await Auth.sb()
+    .from('profiles')
+    .select('id, full_name')
+    .eq('role', 'supervisor')
+    .order('full_name');
+  allSupervisores = data || [];
+
+  // Popular select do modal
+  const sel = document.getElementById('ag-supervisor');
+  sel.innerHTML = '<option value="">— Selecionar supervisor —</option>';
+  allSupervisores.forEach(s => {
+    sel.innerHTML += `<option value="${s.id}">${s.full_name}</option>`;
+  });
+}
+
+async function loadAgentes() {
+  UI.loading(true);
+  try {
+    let query = Auth.sb()
+      .from('agentes')
+      .select('*, profiles(full_name)')
+      .order('nome');
+    if (!Auth.isAdmin()) {
+      query = query.eq('supervisor_id', Auth.currentUser.id);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    allAgentes = data || [];
+    buildPage();
+  } catch(e) {
+    UI.toast('Erro ao carregar agentes: ' + e.message, 'error');
+  } finally {
+    UI.loading(false);
+  }
+}
+
+function buildPage() {
+  const el = document.getElementById('page-content');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div class="filters-row">
+      <div class="search-box" style="flex:1;max-width:340px;">
+        <span class="search-box__icon">🔍</span>
+        <input type="text" id="search-input" class="form-control"
+          placeholder="Pesquisar nome, ID, zona..."
+          oninput="page=1;renderAgentes()">
+      </div>
+      <select class="form-control" id="status-filter" style="width:150px;" onchange="page=1;renderAgentes()">
+        <option value="">Todos estados</option>
+        <option value="ativo">Ativo</option>
+        <option value="inativo">Inativo</option>
+      </select>
+      ${Auth.isAdmin() ? `
+      <select class="form-control" id="sup-filter" style="width:220px;" onchange="page=1;renderAgentes()">
+        <option value="">Todos supervisores</option>
+        ${allSupervisores.map(s => `<option value="${s.id}">${s.full_name}</option>`).join('')}
+      </select>
+      <button class="btn btn--ghost btn--sm" onclick="exportAgentes()">⬇ Exportar</button>
+      ` : ''}
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table class="table">
+          <thead><tr>
+            <th>Agente</th>
+            <th>ID do Agente</th>
+            <th class="table-hide-mobile">Telefone</th>
+            <th class="table-hide-mobile">Supervisor</th>
+            <th class="col-hide-xs">Início</th>
+            <th>Estado</th>
+            <th>Ações</th>
+          </tr></thead>
+          <tbody id="agentes-table-body"></tbody>
+        </table>
+      </div>
+      <div id="pagination" style="padding:0 16px;"></div>
+    </div>`;
+
+  renderAgentes();
+}
+
+function renderAgentes() {
+  const search = document.getElementById('search-input')?.value.toLowerCase() || '';
+  const statusFilter = document.getElementById('status-filter')?.value || '';
+  const supFilter = document.getElementById('sup-filter')?.value || '';
+
+  let filtered = allAgentes.filter(a => {
+    const matchSearch = !search
+      || a.nome?.toLowerCase().includes(search)
+      || a.codigo?.toLowerCase().includes(search)
+      || a.telefone?.includes(search)
+      || a.zona?.toLowerCase().includes(search);
+    const matchStatus = !statusFilter || a.status === statusFilter;
+    const matchSup = !supFilter || a.supervisor_id === supFilter;
+    return matchSearch && matchStatus && matchSup;
+  });
+
+  const paginated = UI.paginate(filtered, page, 15);
+  const container = document.getElementById('agentes-table-body');
+  const paginationEl = document.getElementById('pagination');
+
+  if (!filtered.length) {
+    container.innerHTML = `<tr><td colspan="7">
+      <div class="empty-state">
+        <div class="empty-state__icon">👤</div>
+        <div class="empty-state__title">Nenhum agente encontrado</div>
+      </div>
+    </td></tr>`;
+    paginationEl.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = paginated.items.map(a => `
+    <tr>
+      <td>
+        <div class="table-agent">
+          <div class="table-avatar">
+            ${a.foto_url ? `<img src="${a.foto_url}">` : UI.initials(a.nome)}
+          </div>
+          <div>
+            <div class="table-name">${a.nome}</div>
+            <div class="table-sub">${a.zona || '—'}</div>
+          </div>
+        </div>
+      </td>
+      <td>
+        ${a.codigo
+          ? `<span style="font-family:monospace;font-size:0.82rem;background:rgba(31,60,144,0.15);color:var(--blue-light);padding:2px 8px;border-radius:4px;border:1px solid rgba(31,60,144,0.2);">${a.codigo}</span>`
+          : '<span style="color:var(--text-muted);">—</span>'}
+      </td>
+      <td class="table-hide-mobile">${a.telefone || '—'}</td>
+      <td class="table-hide-mobile">${a.profiles?.full_name || '—'}</td>
+      <td class="col-hide-xs">${UI.formatDate(a.data_inicio)}</td>
+      <td>${UI.statusBadge(a.status)}</td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <a href="agente-detalhe.html?id=${a.id}" class="btn btn--ghost btn--sm">Ver</a>
+          ${Auth.isAdmin() ? `
+            <button class="btn btn--ghost btn--sm" onclick="editAgente('${a.id}')">✏</button>
+            <button class="btn btn--danger btn--sm" onclick="deleteAgente('${a.id}')">🗑</button>` : ''}
+        </div>
+      </td>
+    </tr>`).join('');
+
+  UI.renderPagination(paginationEl, page, paginated.pages, p => { page = p; renderAgentes(); });
+}
+
+// Aguardar layout renderizar
+const observer = new MutationObserver(() => {
+  if (document.getElementById('page-content')) {
+    observer.disconnect();
+    buildPage();
+  }
+});
+observer.observe(document.getElementById('app'), { childList: true, subtree: true });
+
+// ============================================================
+// MODAL
+// ============================================================
+
+function openModal(id = null) {
+  editingId = id;
+  avatarBlob = null;
+  document.getElementById('modal-agente-title').textContent = id ? 'Editar Agente' : 'Novo Agente';
+
+  // Limpar campos
+  ['ag-nome','ag-codigo','ag-telefone','ag-email','ag-zona','ag-obs'].forEach(f => {
+    document.getElementById(f).value = '';
+  });
+  document.getElementById('ag-status').value = 'ativo';
+  document.getElementById('ag-data-inicio').value = '';
+  document.getElementById('ag-supervisor').value = '';
+  document.getElementById('avatar-preview').innerHTML = '?<input type="file" id="avatar-file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;" onchange="previewAvatar(this)">';
+
+  // Se editar, preencher com dados existentes
+  if (id) {
+    const a = allAgentes.find(x => x.id === id);
+    if (a) {
+      document.getElementById('ag-nome').value = a.nome || '';
+      document.getElementById('ag-codigo').value = a.codigo || '';
+      document.getElementById('ag-telefone').value = a.telefone || '';
+      document.getElementById('ag-email').value = a.email || '';
+      document.getElementById('ag-zona').value = a.zona || '';
+      document.getElementById('ag-obs').value = a.observacoes || '';
+      document.getElementById('ag-status').value = a.status || 'ativo';
+      document.getElementById('ag-data-inicio').value = a.data_inicio || '';
+      document.getElementById('ag-supervisor').value = a.supervisor_id || '';
+      if (a.foto_url) {
+        document.getElementById('avatar-preview').innerHTML = `
+          <img src="${a.foto_url}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+          <input type="file" id="avatar-file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;" onchange="previewAvatar(this)">`;
+      }
+    }
+  }
+  document.getElementById('modal-agente').classList.add('active');
+}
+
+function closeModal() {
+  document.getElementById('modal-agente').classList.remove('active');
+}
+
+function previewAvatar(input) {
+  const file = input.files[0];
+  if (!file) return;
+  avatarBlob = file;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('avatar-preview').innerHTML = `
+      <img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">
+      <input type="file" id="avatar-file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;" onchange="previewAvatar(this)">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function saveAgente() {
+  const nome = document.getElementById('ag-nome').value.trim();
+  if (!nome) { UI.toast('O nome é obrigatório', 'warning'); return; }
+
+  const btn = document.getElementById('btn-save-agente');
+  btn.disabled = true; btn.textContent = 'A guardar...';
+
+  try {
+    let foto_url = editingId ? allAgentes.find(x => x.id === editingId)?.foto_url : null;
+
+    if (avatarBlob) {
+      const ext = avatarBlob.name.split('.').pop();
+      const path = `agentes/${Date.now()}.${ext}`;
+      const { error: upErr } = await Auth.sb().storage.from('fotos').upload(path, avatarBlob, { upsert: true });
+      if (!upErr) {
+        const { data: urlData } = Auth.sb().storage.from('fotos').getPublicUrl(path);
+        foto_url = urlData.publicUrl;
+      }
+    }
+
+    const payload = {
+      nome,
+      codigo: document.getElementById('ag-codigo').value.trim() || null,
+      telefone: document.getElementById('ag-telefone').value || null,
+      email: document.getElementById('ag-email').value || null,
+      zona: document.getElementById('ag-zona').value || null,
+      observacoes: document.getElementById('ag-obs').value || null,
+      status: document.getElementById('ag-status').value,
+      data_inicio: document.getElementById('ag-data-inicio').value || null,
+      supervisor_id: document.getElementById('ag-supervisor').value || null,
+      foto_url,
+    };
+
+    let error;
+    if (editingId) {
+      ({ error } = await Auth.sb().from('agentes').update(payload).eq('id', editingId));
+    } else {
+      ({ error } = await Auth.sb().from('agentes').insert(payload));
+    }
+    if (error) throw error;
+
+    UI.toast(editingId ? 'Agente actualizado!' : 'Agente criado!', 'success');
+    closeModal();
+    await loadAgentes();
+  } catch(e) {
+    UI.toast('Erro: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Guardar';
+  }
+}
+
+function editAgente(id) { openModal(id); }
+
+async function deleteAgente(id) {
+  const ok = await UI.confirm('Eliminar agente', 'Esta acção não pode ser revertida. Confirma?');
+  if (!ok) return;
+  const { error } = await Auth.sb().from('agentes').delete().eq('id', id);
+  if (error) { UI.toast('Erro: ' + error.message, 'error'); return; }
+  UI.toast('Agente eliminado.', 'info');
+  await loadAgentes();
+}
+
+function exportAgentes() {
+  const rows = allAgentes.map(a => ({
+    Nome: a.nome,
+    ID: a.codigo || '',
+    Telefone: a.telefone || '',
+    Email: a.email || '',
+    Zona: a.zona || '',
+    Supervisor: a.profiles?.full_name || '',
+    Estado: a.status,
+    Início: UI.formatDate(a.data_inicio)
+  }));
+  exportToCSV(rows, 'agentes.csv');
+}
+</script>
+</body>
+</html>
