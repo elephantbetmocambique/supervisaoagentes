@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agente — SupervisãoAgentes</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+<div id="app"></div>
+<div class="lightbox" id="lightbox" onclick="this.classList.remove('active')">
+  <img class="lightbox__img" id="lightbox-img" src="">
+  <button class="lightbox__close">✕</button>
+</div>
+<script>
+const SUPABASE_URL = 'https://udmlzpvpsllitrhxejvj.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVkbWx6cHZwc2xsaXRyaHhlanZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5MjAyMzEsImV4cCI6MjA5NjQ5NjIzMX0.YK8IxVwt2-cqXRV1nGHLNsHZsvSflcTb1tpUY2dJ0pQ';
+const APP_VERSION = '1.0.0';
+const APP_NAME = 'SupervisãoAgentes';
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/layout.js"></script>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+
+(async () => {
+  const ok = await Auth.init();
+  if (!ok) { window.location.href = '../index.html'; return; }
+  renderLayout('nav-agentes', 'Detalhe do Agente');
+  document.getElementById('topbar-actions').innerHTML = `<a href="agentes.html" class="btn btn--ghost btn--sm">← Voltar</a>`;
+
+  if (!id) return;
+  UI.loading(true);
+  try {
+    const [{ data: agente }, { data: auditorias }] = await Promise.all([
+      Auth.sb().from('agentes').select('*, profiles(full_name)').eq('id', id).single(),
+      Auth.sb().from('auditorias').select('*, profiles(full_name)').eq('agente_id', id).order('data_visita', { ascending: false })
+    ]);
+
+    renderDetail(agente, auditorias || []);
+  } catch(e) {
+    UI.toast('Erro: ' + e.message, 'error');
+  } finally {
+    UI.loading(false);
+  }
+})();
+
+function renderDetail(a, auditorias) {
+  const totalFotos = auditorias.reduce((s, au) => s + (au.fotos?.length || 0), 0);
+  const avgRating = auditorias.filter(au => au.avaliacao).length
+    ? (auditorias.filter(au => au.avaliacao).reduce((s, au) => s + au.avaliacao, 0) / auditorias.filter(au => au.avaliacao).length).toFixed(1)
+    : '—';
+
+  document.getElementById('page-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:280px 1fr;gap:20px;align-items:start;" class="ag-detail-grid">
+      <div>
+        <div class="card card--elevated" style="text-align:center;padding:28px 20px;">
+          <div style="width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--pink));display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:700;color:white;margin:0 auto 16px;overflow:hidden;border:3px solid rgba(255,255,255,0.1);">
+            ${a.foto_url ? `<img src="${a.foto_url}" style="width:100%;height:100%;object-fit:cover;">` : UI.initials(a.nome)}
+          </div>
+          <div style="font-size:1.1rem;font-weight:700;margin-bottom:4px;">${a.nome}</div>
+          ${UI.statusBadge(a.status)}
+          <div style="margin-top:16px;font-size:0.82rem;color:var(--text-muted);display:flex;flex-direction:column;gap:8px;">
+            ${a.telefone ? `<div>📞 ${a.telefone}</div>` : ''}
+            ${a.zona ? `<div>📍 ${a.zona}</div>` : ''}
+            ${a.codigo ? `<div>🪪 ID: ${a.codigo}</div>` : ''}
+            ${a.data_inicio ? `<div>📅 Desde ${UI.formatDate(a.data_inicio)}</div>` : ''}
+          </div>
+          ${a.profiles?.full_name ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);font-size:0.8rem;"><span style="color:var(--text-muted);">Supervisor</span><br><strong>${a.profiles.full_name}</strong></div>` : ''}
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <div class="card__body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;text-align:center;">
+              <div><div style="font-size:1.5rem;font-weight:700;color:var(--blue-light);">${auditorias.length}</div><div style="font-size:0.75rem;color:var(--text-muted);">Auditorias</div></div>
+              <div><div style="font-size:1.5rem;font-weight:700;color:#fbbf24;">${avgRating}</div><div style="font-size:0.75rem;color:var(--text-muted);">Avaliação Média</div></div>
+              <div><div style="font-size:1.5rem;font-weight:700;color:#34d399;">${auditorias.filter(au => au.status === 'aprovado').length}</div><div style="font-size:0.75rem;color:var(--text-muted);">Aprovadas</div></div>
+              <div><div style="font-size:1.5rem;font-weight:700;color:var(--pink-light);">${totalFotos}</div><div style="font-size:0.75rem;color:var(--text-muted);">Fotos</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <!-- Recent photos -->
+        ${auditorias.some(au => au.fotos?.length) ? `
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card__header"><span class="card__title">Fotos Recentes</span></div>
+          <div class="card__body">
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;">
+              ${auditorias.flatMap(au => au.fotos || []).slice(0, 12).map(url =>
+                `<div style="aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;" onclick="document.getElementById('lightbox-img').src='${url}';document.getElementById('lightbox').classList.add('active')">
+                  <img src="${url}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
+                </div>`).join('')}
+            </div>
+          </div>
+        </div>` : ''}
+
+        <!-- Auditorias history -->
+        <div class="card">
+          <div class="card__header"><span class="card__title">Histórico de Auditorias</span></div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>Data</th><th>Supervisor</th><th>Avaliação</th><th>Estado</th><th></th></tr></thead>
+              <tbody>
+                ${auditorias.map(au => `<tr>
+                  <td>${UI.formatDate(au.data_visita)}</td>
+                  <td>${au.profiles?.full_name || '—'}</td>
+                  <td>${Array.from({length:5},(_,i)=>`<span style="color:${i<(au.avaliacao||0)?'#fbbf24':'var(--gray-600)'}">★</span>`).join('')}</td>
+                  <td>${UI.statusBadge(au.status)}</td>
+                  <td><a href="auditoria-detalhe.html?id=${au.id}" class="btn btn--ghost btn--sm">Ver</a></td>
+                </tr>`).join('') || '<tr><td colspan="5"><div class="empty-state" style="padding:24px;">Sem auditorias</div></td></tr>'}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  const style = document.createElement('style');
+  style.textContent = '@media(max-width:700px){.ag-detail-grid{grid-template-columns:1fr!important}}';
+  document.head.appendChild(style);
+}
+</script>
+</body>
+</html>
