@@ -7,6 +7,7 @@ const NAV_ITEMS_ADMIN = [
   { href: 'dashboard.html', icon: '◈', label: 'Dashboard', id: 'nav-dashboard' },
   { section: 'Gestão' },
   { href: 'agentes.html', icon: '👤', label: 'Agentes', id: 'nav-agentes' },
+  { href: 'importar-agentes.html', icon: '⬆', label: 'Importar em Lote', id: 'nav-importar' },
   { href: 'supervisores.html', icon: '🎖', label: 'Supervisores', id: 'nav-supervisores' },
   { href: 'auditorias.html', icon: '📋', label: 'Auditorias', id: 'nav-auditorias' },
   { href: 'fotos.html', icon: '🖼', label: 'Galeria de Fotos', id: 'nav-fotos' },
