@@ -62,7 +62,7 @@ function buildPage() {
               Descarregue o modelo, preencha com os dados dos agentes e carregue o ficheiro abaixo. As colunas devem estar exactamente como no modelo.
             </p>
             <div style="background:var(--gray-800);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-family:monospace;font-size:0.78rem;color:var(--text-secondary);margin-bottom:14px;overflow-x:auto;white-space:nowrap;">
-              nome,codigo,telefone,email,zona,data_inicio,status
+              nome,id_do_agente,telefone,email,zona,data_inicio,status
             </div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;">
               <button class="btn btn--primary btn--sm" onclick="downloadTemplate()">⬇ Descarregar modelo.csv</button>
@@ -174,7 +174,7 @@ function buildPage() {
             <div>
               <div style="font-weight:600;color:var(--text-primary);margin-bottom:4px;">Colunas opcionais</div>
               <div style="display:flex;flex-direction:column;gap:4px;">
-                <span>• <code style="color:var(--blue-light);">codigo</code> — ID do agente na empresa</span>
+                <span>• <code style="color:var(--blue-light);">id_do_agente</code> — ID do Agente na empresa</span>
                 <span>• <code style="color:var(--blue-light);">telefone</code> — Ex: 841234567</span>
                 <span>• <code style="color:var(--blue-light);">email</code> — Email do agente</span>
                 <span>• <code style="color:var(--blue-light);">zona</code> — Ex: Matola</span>
@@ -266,7 +266,7 @@ function parseCSV(text) {
 
     parsedRows.push({
       nome,
-      codigo: get('codigo') || get('id_agente') || null,
+      codigo: get('id_do_agente') || get('codigo') || get('id_agente') || null,
       telefone: get('telefone') || null,
       email: get('email') || null,
       zona: get('zona') || null,
@@ -455,7 +455,7 @@ function resetImport() {
 // ============================================================
 
 function downloadTemplate() {
-  const csv = 'nome,codigo,telefone,email,zona,data_inicio,status\n';
+  const csv = 'nome,id_do_agente,telefone,email,zona,data_inicio,status\n';
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -464,7 +464,7 @@ function downloadTemplate() {
 }
 
 function usarExemplo() {
-  const exemplo = `nome,codigo,telefone,email,zona,data_inicio,status
+  const exemplo = `nome,id_do_agente,telefone,email,zona,data_inicio,status
 João Manuel Silva,AG-001,841234567,joao@email.com,Matola,2025-01-15,ativo
 Maria Costa Fernandes,AG-002,862345678,,Maputo Centro,2025-02-01,ativo
 Pedro Nunes Machava,AG-003,,pedro@email.com,Boane,,ativo
